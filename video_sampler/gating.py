@@ -6,6 +6,7 @@ from PIL import Image
 
 from .schemas import EMPTY_GATED_OBJECT, FrameObject, GatedObject
 from .utils import batched
+DEVICE="cuda"
 
 with contextlib.suppress(ImportError):
     import cv2
@@ -23,8 +24,9 @@ with contextlib.suppress(ImportError):
 
 
 def create_model(model_name: str):
+    pretrained_tag = open_clip.list_pretrained_tags_by_model(model_name)[0]
     model, _, preprocess = open_clip.create_model_and_transforms(
-        model_name, pretrained="laion2b_s34b_b79k"
+        model_name, pretrained_tag
     )
     tokenizer = open_clip.get_tokenizer(model_name)
     model.eval()
@@ -108,6 +110,8 @@ class ClipGate:
         self,
         pos_samples: list[str] = None,
         neg_samples: list[str] = None,
+        height: int = 0,
+        width: int = 0,
         model_name: str = "ViT-B-32",
         batch_size: int = 32,
         pos_margin: float = 0.2,
@@ -130,14 +134,15 @@ class ClipGate:
         self.pos_margin = pos_margin
         self.neg_margin = neg_margin
         self.batch_size = batch_size
+        self.height,self.width=self.model.text_projection.size()
         self.frame_accumulator = []
         self.metadata_accumulator = []
         if pos_samples is None:
-            self.pos_samples = torch.zeros((1, 512))
+            self.pos_samples = torch.zeros((1, self.width))
         else:
             self.pos_samples = self._preproc_samples(pos_samples)
         if neg_samples is None:
-            self.neg_samples = torch.zeros((1, 512))
+            self.neg_samples = torch.zeros((1, self.width))
         else:
             self.neg_samples = self._preproc_samples(neg_samples)
 
@@ -146,7 +151,7 @@ class ClipGate:
 
     def _preproc_samples(self, sample_texts: list[str]):
         inputs = self.tokenizer(sample_texts)
-        embeds = torch.zeros((len(sample_texts), 512))
+        embeds = torch.zeros((len(sample_texts), self.width))
         with torch.no_grad():
             for i, batch in enumerate(batched(inputs, n=self.batch_size)):
                 batch = torch.stack(batch)
