@@ -1,26 +1,21 @@
 import contextlib
-from typing import Any, Literal
-
+import cv2
 import numpy as np
+import open_clip
+import torch
+from typing import Any, Literal
 from PIL import Image
 
 from .schemas import EMPTY_GATED_OBJECT, FrameObject, GatedObject
 from .utils import batched
-DEVICE="cuda"
 
-with contextlib.suppress(ImportError):
-    import cv2
-with contextlib.suppress(ImportError):
-    import open_clip
-    import torch
-
-    DEVICE = "cpu"
-    # Check if CUDA is available and set the device to 'cuda'
-    if torch.cuda.is_available():
-        DEVICE = "cuda"
-    # Check if MPS (Metal Performance Shaders) is available and set the device to 'mps'
-    if torch.backends.mps.is_available():
-        DEVICE = "mps"
+DEVICE = "cpu"
+# Check if CUDA is available and set the device to 'cuda'
+if torch.cuda.is_available():
+    DEVICE = "cuda"
+# Check if MPS (Metal Performance Shaders) is available and set the device to 'mps'
+if torch.backends.mps.is_available():
+    DEVICE = "mps"
 
 
 def create_model(model_name: str):
@@ -134,7 +129,7 @@ class ClipGate:
         self.pos_margin = pos_margin
         self.neg_margin = neg_margin
         self.batch_size = batch_size
-        self.height,self.width=self.model.text_projection.size()
+        self.height, self.width = self.model.text_projection.size()
         self.frame_accumulator = []
         self.metadata_accumulator = []
         if pos_samples is None:
@@ -156,7 +151,7 @@ class ClipGate:
             for i, batch in enumerate(batched(inputs, n=self.batch_size)):
                 batch = torch.stack(batch)
                 text_embeds = self.model.encode_text(batch.to(DEVICE))
-                embeds[i * self.batch_size : (i + 1) * self.batch_size] = (
+                embeds[i * self.batch_size: (i + 1) * self.batch_size] = (
                     text_embeds.cpu()
                 )
         embeds /= embeds.norm(dim=-1, keepdim=True)
@@ -196,7 +191,8 @@ class ClipGate:
         frame_embeds = self._embed_frames(self.frame_accumulator)
         selected_frames = self._get_margins(frame_embeds)
         to_return = [
-            FrameObject(self.frame_accumulator[i], self.metadata_accumulator[i])
+            FrameObject(self.frame_accumulator[i],
+                        self.metadata_accumulator[i])
             for i in range(len(self.frame_accumulator))
             if i in selected_frames
         ]

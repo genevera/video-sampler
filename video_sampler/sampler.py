@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from collections import Counter
@@ -245,13 +246,13 @@ class Worker:
         if self.cfg.summary_config:
             from concurrent.futures import ThreadPoolExecutor
 
-            from .integrations.llava_chat import ImageDescriptionDefault
+            from .integrations.llava_chat import ImageDescriptionOpenAI
 
             console.print("Initialising summary pool...", style="bold yellow")
             self.pool = ThreadPoolExecutor(
                 max_workers=self.cfg.summary_config.get("max_workers", 2)
             )
-            self.desc_client = ImageDescriptionDefault(
+            self.desc_client = ImageDescriptionOpenAI(
                 url=self.cfg.summary_config.get("url")
             )
 
@@ -272,8 +273,6 @@ class Worker:
                         f"\t{summary}",
                         style="bold green",
                     )
-        import json
-
         # save as a jsonl
         try:
             with open(os.path.join(savepath, "summaries.jsonl"), "w") as f:
@@ -281,6 +280,22 @@ class Worker:
                     f.write(json.dumps(item) + "\n")
         except OSError as e:
             console.print(f"Failed to write to file: {e}", style="bold red")
+
+    def produce_summary(self, openpath: str):
+        from .integrations.llava_chat import VideoSummary
+        vs = VideoSummary(url=self.cfg.summary_config.get("url"))
+        image_descriptions = []
+        try:
+            with open(os.path.join(openpath, "summaries.jsonl"), "r") as f:
+                items = f.readlines()
+            for item in items:
+                ji = json.loads(item)
+                image_descriptions.append(ji["summary"])
+            summary = vs.summarise_video(image_descriptions=image_descriptions)
+            with open(os.path.join(openpath, "summaries.jsonl"), "a") as w:
+                w.write(json.dumps({"time": "end", "summary": summary}))
+        except Exception as e:
+            print(f"argh: {e}")
 
     def launch(
         self,
@@ -312,6 +327,8 @@ class Worker:
         self.queue_reader(output_path, read_interval=self.cfg.queue_wait)
         proc_thread.join()
         self.collect_summaries(output_path)
+        self.produce_summary(output_path)
+
         if self.cfg.print_stats:
             console.print(
                 f"Stats for: {pretty_video_name}",

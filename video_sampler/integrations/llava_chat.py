@@ -155,6 +155,10 @@ class ImageDescriptionDefault(ImageDescription):
 class ImageDescriptionOpenAI(ImageDescription):
     def __init__(self, url: str = "http://localhost:8080"):
         super().__init__(url)
+        self.headers = {
+            "accept-language": "en-GB,en",
+            "content-type": "application/json",
+        }
         if api_key := os.getenv("OPENAI_API_KEY"):
             self.headers["Authorization"] = f"Bearer {api_key}"
         self.client = OpenAI(base_url=self.url, api_key=api_key)
@@ -183,7 +187,7 @@ class ImageDescriptionOpenAI(ImageDescription):
             max_tokens=300,
             stream=False,
         )
-        return completion["choices"][0]["message"]["content"]
+        return completion.choices[0].message.content
 
 
 class VideoSummary:
@@ -201,11 +205,17 @@ class VideoSummary:
             url (str): The base URL of the LLaMA API."""
         if url is None:
             url = "http://localhost:8080/v1"
-        super().__init__(url)
+        self.url = url
+        self.headers = {}
+        if api_key := os.getenv("OPENAI_API_KEY"):
+            self.headers["Authorization"] = f"Bearer {api_key}"
+        self.client = OpenAI(base_url=self.url, api_key=api_key)
 
     def get_prompt(self):
         return """You're an AI assistant that summarises videos based on image descriptions.
-        Combine image descriptions into a coherent summary of the video."""
+        Combine the following image descriptions into a coherent summary of the
+        video.  Be sure to refer to the collection of descriptions as "the video"
+        rather than any single image"""
 
     def summarise_video(self, image_descriptions: list[str]):
         """Summarise the video using the LLaMA API.
@@ -214,7 +224,7 @@ class VideoSummary:
         Returns:
             str: The summary of the video.
         """
-        return self.client.chat.completions.create(
+        completion = self.client.chat.completions.create(
             model="LLaMA_CPP",
             messages=[
                 {
@@ -225,3 +235,4 @@ class VideoSummary:
             ],
             max_tokens=300,
         )
+        return completion.choices[0].message.content
