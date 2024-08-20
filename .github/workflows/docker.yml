@@ -21,5 +21,5 @@ jobs:
       with:
         push: true
         tags: |
-          ghcr.io/lemurpwned/video-sampler:latest
-          ghcr.io/lemurpwned/video-sampler:${{github.sha}}
+          ghcr.io/${{github.actor}}/video-sampler:latest
+          ghcr.io/${{github.actor}}/video-sampler:${{github.sha}}
